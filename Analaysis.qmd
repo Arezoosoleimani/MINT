@@ -1,0 +1,528 @@
+---
+title: "paper"
+author: "Arezoo"
+format: pdf
+editor: visual
+---
+
+# 0. Setup
+
+```{r}
+#| message: false
+#| warning: false
+
+library(AER)
+library(BayesFactor)
+library(BFpack)
+library(brms)
+library(broom)
+library(dagitty)
+library(devtools)
+library(dplyr)
+library(easystats)
+library(emmeans)
+library(GGally)
+library(ggdag)
+library(ggdist)
+library(ggExtra)
+library(ggplot2)
+library(ggrepel)
+library(GPArotation)
+library(gridExtra)
+library(haven)
+library(infer)
+library(janitor)
+library(jpeg)
+library(kableExtra)
+library(knitr)
+library(lavaan)
+library(lme4)
+library(logspline)
+library(magrittr)
+library(margins)
+library(modelr)
+library(patchwork)
+library(pbkrtest)
+library(psych)
+library(purrr)
+library(pwr)
+library(readr)
+library(readxl)
+library(rstanarm)
+library(scales)
+library(semPlot)
+library(stringr)
+library(tidyLPA)
+library(tidyr)
+library(tidyverse)
+
+
+```
+
+# Data
+
+```{r}
+# adding data set
+data <- read.csv("data.csv")
+
+data$sex <- as.factor(data$sex)
+data$ethnicity <- as.factor(data$ethnicity)
+data$year <- as.factor(data$year)
+
+str(data)
+```
+
+# Descrip
+
+```{r}
+age_summary<-data|>
+  summarize(Variable= "Age", Mean=mean(age), Median=median(age),sd= sd(age), n= n())
+
+
+```
+
+```{r}
+descriptives <- describe(data[, c(
+  "age", "gpa", "act", "sat_reading", "sat_math",
+  "LS", "FC", "EQ",
+  "CN_S", "CN_A", "CN_I", "CN_C", "CN_M",
+  "M_S", "M_B", "M_Se", "M_Sa",
+  "EI_Ch", "EI_Cu", "EI_I", "EI_E", "EI_P", "EI_D",
+  "MC_S", "MC_P", "MC_A",
+  "NE_N", "NE_O", "NE_C",
+  "AR_1_1", "AR_1_2", "AR_1_3", "AR_1_4", "AR_1_5",
+  "AR_2", "AR_3",
+  "AI_1", "AI_2", "AI_3", "AI_4", "AI_5"
+)])
+
+descriptives <- descriptives[, c("n", "mean", "median", "sd", "min", "max")]
+
+descriptives |>  kable (caption= "Summary Statistics",digits=2)
+```
+
+```{r}
+categorical_summary <- data |>
+  select(sex, ethnicity, year) |>
+  pivot_longer(everything(),
+               names_to = "Variable",
+               values_to = "Category") |>
+  filter(!is.na(Category)) |>
+  count(Variable, Category) |>
+  group_by(Variable) |>
+  mutate(Percentage = round(n / sum(n) * 100, 1))
+
+categorical_summary |>  kable (caption= "Summary Statistics",digits=2)
+```
+
+# Reliability
+
+```{r}
+#psych::alpha(data[, paste0("EQ", 1:33)]) |> print ()
+
+# Emotional Intelligence
+psych::alpha(data[, paste0("EQ", 1:33)])$total$raw_alpha
+
+
+# Core Needs
+psych::alpha(data[, paste0("CN_1_", 1:8)])$total$raw_alpha   # Security
+psych::alpha(data[, paste0("CN_2_", 1:8)])$total$raw_alpha   # Acceptance
+psych::alpha(data[, paste0("CN_3_", 1:8)])$total$raw_alpha   # Initiative
+psych::alpha(data[, paste0("CN_4_", 1:8)])$total$raw_alpha   # Competence
+psych::alpha(data[, paste0("CN_5_", 1:8)])$total$raw_alpha   # Meaning
+
+
+# Maslow
+psych::alpha(data[, paste0("MA_1_", 1:10)])$total$raw_alpha  # Safety
+psych::alpha(data[, paste0("MA_2_", 1:10)])$total$raw_alpha  # Belonging
+psych::alpha(data[, paste0("MA_3_", 1:10)])$total$raw_alpha  # Self-esteem
+psych::alpha(data[, paste0("MA_4_", 1:10)])$total$raw_alpha  # Self-actualization
+
+
+# Extrinsic / Intrinsic Motives
+psych::alpha(data[, paste0("EI_1_", 1:6)])$total$raw_alpha   # Challenge
+psych::alpha(data[, paste0("EI_2_", 1:6)])$total$raw_alpha   # Curiosity
+psych::alpha(data[, paste0("EI_3_", 1:5)])$total$raw_alpha   # Independence Mastery
+psych::alpha(data[, paste0("EI_4_", 1:5)])$total$raw_alpha   # Easy Work
+psych::alpha(data[, paste0("EI_5_", 1:3)])$total$raw_alpha   # Pleasing Teacher
+psych::alpha(data[, paste0("EI_6_", 1:5)])$total$raw_alpha   # Dependence on Teacher
+
+
+# McClelland
+psych::alpha(data[, paste0("MC_1_", 1:4)])$total$raw_alpha   # Self-achievement
+psych::alpha(data[, paste0("MC_2_", 1:3)])$total$raw_alpha   # Power
+psych::alpha(data[, paste0("MC_3_", 1:3)])$total$raw_alpha   # Affiliation
+
+
+# NEO
+psych::alpha(data[, paste0("NE_1_", 1:12)])$total$raw_alpha  # Neuroticism
+psych::alpha(data[, paste0("NE_2_", 1:12)])$total$raw_alpha  # Openness
+psych::alpha(data[, paste0("NE_3_", 1:12)])$total$raw_alpha  # Conscientiousness
+```
+
+```{r}
+# LS and FC with KR-20
+
+# Letter Sets
+psych::alpha(data[, paste0("LS", 1:15, "_score")])$total$raw_alpha
+psych::alpha(data[, paste0("LS", 1:15, "_score")])$item.stats
+
+# Figure Classification
+psych::alpha(data[, paste0("FC", 1:14)])$total$raw_alpha
+```
+
+# Correlation
+
+```{r}
+# Load required package
+# Select variables for correlations
+cor_data <- data[, c(
+  "CN_S", "CN_A", "CN_I", "CN_C", "CN_M",
+  "M_S", "M_B", "M_Se", "M_Sa",
+  "EI_Ch", "EI_Cu", "EI_I", "EI_E", "EI_P", "EI_D",
+  "MC_S", "MC_P",
+  "NE_N", "NE_O", "NE_C", "EQ",
+  "LS", "FC", "gpa")]
+
+
+variable_labels <- c(
+  CN_S  = "CN_Security",
+  CN_A  = "CN_Acceptance",
+  CN_I  = "CN_Initiative",
+  CN_C  = "CN_Competence",
+  CN_M  = "CN_Meaning",
+  M_S   = "M_Safety",
+  M_B   = "M_Belonging",
+  M_Se  = "M_Self-esteem",
+  M_Sa  = "M_Self-actualization",
+  EI_Ch = "EI_Challenge",
+  EI_Cu = "EI_Curiosity",
+  EI_I  = "EI_Independence Mastery",
+  EI_E  = "EI_Easy work",
+  EI_P  = "EI_Pleasing",
+  EI_D  = "EI_Dependence on teacher",
+  MC_S  = "MC_Self-achievement",
+  MC_P  = "MC_Power",
+  
+  EQ    = "Emotional Intelligence",
+  NE_N  = "NE_Neuroticism",
+  NE_O  = "NE_Openness",
+  NE_C  = "NE_Conscientiousness",
+  LS    = "Letter Sets",
+  FC    = "Figure Classification",
+  NS_S  = "Security satisfaction",
+  NS_A  = "Acceptance satisfaction",
+  NS_I  = "Initiative satisfaction",
+  NS_C  = "Self-efficacy satisfaction",
+  NS_M  = "Meaning satisfaction",
+  gpa   = "GPA"
+)
+
+names(cor_data) <- unname(variable_labels[names(cor_data)])
+
+
+intercor_matrix <- cor(cor_data, use = "pairwise.complete.obs", method = "pearson")
+
+print(intercor_matrix)
+
+corr_test <- psych::corr.test(cor_data, use = "pairwise", method = "pearson", 
+                              adjust = "none")
+print(corr_test$r)|>  kable (digits=2)   # Correlation coefficients
+print(corr_test$p)|>  kable (digits=2)    # p-values
+
+
+
+r <- corr_test$r
+p <- corr_test$p
+
+stars <- ifelse(p < .001, "***", ifelse(p < .01, "**", ifelse(p < .05, "*", "")))
+
+corr_table <- matrix(
+  paste0(round(r, 2), stars),
+  nrow = nrow(r),
+  dimnames = dimnames(r))
+
+corr_table |> kable(digits = 2)
+
+##cleaner
+corr_table <- as.data.frame(corr_table)
+corr_table
+```
+
+```{r}
+
+
+# Open a large, high-resolution image
+png(
+  "correlation_plot.png",
+  width = 16, height = 14, units = "in",
+  res = 300, pointsize = 12, bg = "white"
+)
+
+corrplot::corrplot(
+  round(corr_test$r, 1),
+  method = "color",
+  type = "lower",          # shows only half of the matrix
+  diag = FALSE,            # removes the 1.00 diagonal
+
+  
+  addCoef.col = "black",
+  number.cex = 0.85,        # makes correlation numbers smaller
+  
+  number.font = 2,
+  
+  tl.cex = 0.8,            # makes variable names smaller
+  tl.col = "black",
+  tl.srt = 45,
+  
+  p.mat = corr_test$p,     # gives corrplot the p-values
+  sig.level = 0.05,
+  insig = "blank"          # hides nonsignificant correlations
+)
+
+
+
+# Finish saving the image
+dev.off()
+```
+
+# CFA
+
+### First Order
+
+```{r}
+# Define CFA model
+
+CN_model1 <- '
+
+Security =~ CN_1_1 + CN_1_2 + CN_1_3 + CN_1_4 + CN_1_5 + CN_1_6 + CN_1_7 + CN_1_8
+
+Acceptance =~ CN_2_1 + CN_2_2 + CN_2_3 + CN_2_4 + CN_2_5 + CN_2_6 + CN_2_7 +CN_2_8
+
+Initiative =~ CN_3_1 + CN_3_2 + CN_3_3 + CN_3_4 +CN_3_5 + CN_3_6 + CN_3_7 + CN_3_8
+
+Competence =~ CN_4_1 + CN_4_2 + CN_4_3 + CN_4_4 +CN_4_5 + CN_4_6 + CN_4_7 + CN_4_8
+
+Meaning =~ CN_5_1 + CN_5_2 + CN_5_3 + CN_5_4 + CN_5_5 + CN_5_6 + CN_5_7 + CN_5_8
+
+'
+
+fit_CN1 <- cfa(CN_model1, data = data, std.lv = TRUE, 
+              missing = "fiml",estimator = "MLR")
+
+
+summary(fit_CN1,
+        fit.measures = TRUE,
+        standardized = TRUE)
+
+#Main Fit Indice
+fitMeasures(fit_CN1, c("cfi", "tli", "rmsea", "srmr"))
+
+#Corelations among factors
+lavInspect(fit_CN1, "cor.lv")
+
+#modification indices
+modificationIndices(fit_CN1,
+                    sort. = TRUE,
+                    minimum.value = 10)
+
+
+#Plot
+
+# Open a high-resolution PNG
+png(
+  "CN1_CFA.png",
+  width = 14, height = 22, units = "in",
+  res = 300, pointsize = 12, bg = "white"
+)
+
+semPlot::semPaths(
+  fit_CN1,
+  what = "paths",
+  whatLabels = "std",          # Standardized estimates
+  layout = "tree2",
+  rotation = 2,               # Factors left, items right
+  
+  nCharNodes = 0,              # Show full variable names
+  nDigits = 2,
+  sizeMan = 6,
+  sizeMan2 = 2.5,
+  sizeLat = 10,
+  sizeLat2 = 5,
+  edge.label.cex = 0.9,
+  
+  residuals = FALSE,
+  intercepts = FALSE,
+  exoCov = TRUE,               # Show factor correlations
+  
+  color = list(lat = "#D8E8F5", man = "white"),
+  edge.color = "black",
+  fade = FALSE,
+  normalize = FALSE,
+  mar = c(4, 8, 4, 4)
+)
+
+# Finish saving
+dev.off()
+
+```
+
+### Second Order
+
+```{r}
+# Define CFA model
+
+CN_model2 <- '
+
+Security =~ CN_1_1 + CN_1_2 + CN_1_3 + CN_1_4 + CN_1_5 + CN_1_6 + CN_1_7 + CN_1_8
+
+Acceptance =~ CN_2_1 + CN_2_2 + CN_2_3 + CN_2_4 + CN_2_5 + CN_2_6 + CN_2_7 +CN_2_8
+
+Initiative =~ CN_3_1 + CN_3_2 + CN_3_3 + CN_3_4 +CN_3_5 + CN_3_6 + CN_3_7 + CN_3_8
+
+Competence =~ CN_4_1 + CN_4_2 + CN_4_3 + CN_4_4 +CN_4_5 + CN_4_6 + CN_4_7 + CN_4_8
+
+Meaning =~ CN_5_1 + CN_5_2 + CN_5_3 + CN_5_4 + CN_5_5 + CN_5_6 + CN_5_7 + CN_5_8
+
+CoreNeed =~ Security + Acceptance + Initiative + Competence + Meaning
+
+'
+
+fit_CN2 <- cfa(CN_model2, data = data, std.lv = TRUE, 
+              missing = "fiml",estimator = "MLR")
+
+
+summary(fit_CN2,
+        fit.measures = TRUE,
+        standardized = TRUE)
+
+#Main Fit Indice
+fitMeasures(fit_CN2, c("cfi", "tli", "rmsea", "srmr"))
+
+#Corelations among factors
+lavInspect(fit_CN2, "cor.lv")
+
+#modification indices
+modificationIndices(fit_CN2,
+                    sort. = TRUE,
+                    minimum.value = 10)
+
+```
+
+# PCA
+
+```{r}
+
+
+# Select variables
+data_PCA1 <- data[, c(
+  "CN_S", "CN_A", "CN_I", "CN_C", "CN_M",
+  "M_S", "M_B", "M_Se", "M_Sa",
+  "EI_Ch", "EI_Cu", "EI_I", "EI_E", "EI_P", "EI_D",
+  "MC_S", "MC_P",
+  "NE_N", "NE_O", "NE_C", "EQ",
+  "LS", "FC", "gpa"
+)]
+
+
+# Remove rows with missing values
+data_PCA1 <- na.omit(data_PCA1)
+
+
+# PCA
+pca_result1 <- prcomp(data_PCA1, center = TRUE, scale. = TRUE)
+
+
+# Eigenvalues
+eigenvalues1 <- pca_result1$sdev^2
+eigenvalues1
+
+
+# Kaiser rule: number of components with eigenvalue > 1
+kaiser_components1 <- which(eigenvalues1 > 1)
+kaiser_components1
+
+n_components1 <- length(kaiser_components1)
+n_components1
+
+
+# Percentage of variance explained
+variance_explained1 <- eigenvalues1 / sum(eigenvalues1)
+
+variance_explained1 * 100
+
+
+# Cumulative percentage of variance explained
+cumulative_variance1 <- cumsum(variance_explained1)
+
+cumulative_variance1 * 100
+
+
+# PCA with Varimax rotation
+pca_varimax1 <- psych::principal(
+  data_PCA1,
+  nfactors = n_components1,
+  rotate = "varimax"
+)
+
+
+# Rotated component loadings
+print(pca_varimax1$loadings, cutoff = 0.30)
+
+
+# Scree plot
+scree1 <- data.frame(
+  PC = 1:length(eigenvalues1),
+  Eigenvalue = eigenvalues1,
+  Variance = variance_explained1,
+  CumulativeVariance = cumulative_variance1,
+  Keep = ifelse(eigenvalues1 > 1, "Keep", "Drop")
+)
+
+
+ggplot(scree1, aes(x = PC)) +
+  geom_line(aes(y = Eigenvalue)) +
+  geom_point(aes(y = Eigenvalue, color = Keep), size = 3) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  
+  geom_text_repel(
+    data = subset(scree1, Keep == "Keep"),
+    aes(
+      y = Eigenvalue,
+      label = paste0(
+        "PC", PC, "\n",
+        round(CumulativeVariance * 100, 1), "%"
+      )
+    ),
+    nudge_y = 0.2,
+    size = 4
+  ) +
+  
+  geom_line(
+    aes(y = CumulativeVariance * max(eigenvalues1)),
+    linetype = "dotted"
+  ) +
+  
+  geom_point(
+    aes(y = CumulativeVariance * max(eigenvalues1)),
+    size = 2
+  ) +
+  
+  scale_y_continuous(
+    name = "Eigenvalue",
+    sec.axis = sec_axis(
+      ~ . / max(eigenvalues1),
+      name = "Cumulative Variance Explained",
+      labels = scales::percent
+    )
+  ) +
+  
+  labs(
+    title = "Scree Plot with Kaiser Rule & Cumulative Variance",
+    x = "Principal Components",
+    color = "Kaiser Rule"
+  ) +
+  
+  theme_minimal()
+
+
+```

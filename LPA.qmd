@@ -1,0 +1,403 @@
+---
+title: "paper"
+author: "Arezoo"
+format: pdf
+editor: visual
+---
+
+# 0. Setup
+
+```{r}
+#| message: false
+#| warning: false
+
+library(AER)
+library(BayesFactor)
+library(BFpack)
+library(brms)
+library(broom)
+library(corrplot)
+library(dagitty)
+library(devtools)
+library(dplyr)
+library(easystats)
+library(emmeans)
+library(GGally)
+library(ggdag)
+library(ggdist)
+library(ggExtra)
+library(ggplot2)
+library(ggrepel)
+library(GPArotation)
+library(gridExtra)
+library(gtsummary)
+library(haven)
+library(infer)
+library(janitor)
+library(jpeg)
+library(kableExtra)
+library(knitr)
+library(lavaan)
+library(lme4)
+library(logspline)
+library(magrittr)
+library(margins)
+library(modelr)
+library(patchwork)
+library(pbkrtest)
+library(psych)
+library(purrr)
+library(pwr)
+library(readr)
+library(readxl)
+library(rstanarm)
+library(scales)
+library(semPlot)
+library(stringr)
+library(tidyLPA)
+library(tidyr)
+library(tidyverse)
+
+```
+
+# Data
+
+```{r}
+# adding data set
+data <- read.csv("data.csv")
+
+data$sex <- as.factor(data$sex)
+data$ethnicity <- as.factor(data$ethnicity)
+data$year <- as.factor(data$year)
+
+
+#rename satisfactions
+data <- dplyr::rename(
+  data,
+  `Security`   = AR_1_1,
+  `Acceptance` = AR_1_2,
+  `Initiative` = AR_1_3,
+  `Competence` = AR_1_4,
+  `Meaning`    = AR_1_5)
+
+
+```
+
+# LPA
+
+### Models
+
+```{r}
+
+
+data%>% 
+  dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles=1:2,  
+                    variances = "varying",
+                    covariances = "varying") ->model6_all
+
+model6_all
+
+
+
+data%>%  dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles=1:3, 
+                    variances = "varying",
+                    covariances = "zero") ->model2_all
+
+model2_all
+
+
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles=1:6,  
+                    variances = "equal",
+                    covariances = "zero") ->model1_all
+
+model1_all
+
+
+
+```
+
+### Selected Models
+
+```{r}
+#Model2_Class 2 & 3
+#Model 1_class 2 & 3 & 6
+
+##############################################
+##Model2_Class 2
+##############################################
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles =  2,
+                    variances = "varying",
+                    covariances = "zero") ->model2_2
+
+#Parameter estimates
+print(tidyLPA::get_estimates(model2_2), n=28)     
+round(model2_2$model_2_class_2$fit, digits=3)
+
+#Or
+get_fit(model2_2)
+
+
+#############################################
+##Model2_Class 3
+############################################
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles =  3,
+                    variances = "varying",
+                    covariances = "zero") ->model2_3
+
+#Parameter estimates
+print(tidyLPA::get_estimates(model2_3), n=28)    
+round(model2_3$model_2_class_3$fit, digits=3)
+
+#Or
+get_fit(model2_3)
+
+#############################################
+#Model 1_class 2 
+############################################
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles =  2,
+                    variances = "equal",
+                    covariances = "zero") ->model1_2
+
+#Parameter estimates
+print(tidyLPA::get_estimates(model1_2), n=28)     
+round(model1_2$model_1_class_2$fit, digits=3)
+
+#Or
+get_fit(model1_2)
+
+#############################################
+#Model 1_class 3
+############################################
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles =  3,
+                    variances = "equal",
+                    covariances = "zero") ->model1_3
+
+#Parameter estimates
+print(tidyLPA::get_estimates(model1_3), n=28)    
+round(model1_3$model_1_class_3$fit, digits=3)
+
+#Or
+get_fit(model1_3)
+
+#############################################
+#Model 1_class 6
+############################################
+data%>% dplyr::select(Security, Acceptance, Initiative, Competence, Meaning) %>%
+  single_imputation() %>%
+  estimate_profiles(n_profiles =  6,
+                    variances = "equal",
+                    covariances = "zero") ->model1_6
+
+#Parameter estimates
+print(tidyLPA::get_estimates(model1_6), n=28)     
+round(model1_6$model_1_class_6$fit, digits=3)
+
+#Or
+get_fit(model1_6)
+
+```
+
+### Plot
+
+```{r}
+############################################################
+# Model 2. Plot the two-class solution.
+############################################################
+
+tidyLPA::plot_profiles(
+  model2_2,
+  rawdata = FALSE,  # Hide individual participants' observations.
+  add_line = TRUE, # Connect each profile's indicator means.
+  sd = FALSE       # Hide standard-deviation bars.
+) +
+  ggplot2::theme(
+    # Rotate and align indicator labels to improve readability.
+    axis.text.x = ggplot2::element_text(angle = 35, vjust = 1, hjust = 1)
+  )
+
+#__________________________________________________________
+# For the other plots, replace "model_2_class_3" above with:
+#__________________________________________________________
+
+tidyLPA::plot_profiles(
+  model2_3,
+  rawdata = FALSE,  # Hide individual participants' observations.
+  add_line = TRUE, # Connect each profile's indicator means.
+  sd = FALSE       # Hide standard-deviation bars.
+) +
+  ggplot2::theme(
+    # Rotate and align indicator labels to improve readability.
+    axis.text.x = ggplot2::element_text(angle = 35, vjust = 1, hjust = 1)
+  )
+
+########################################
+#Model 1 Class 2 - 3 - 6
+##########################################
+
+tidyLPA::plot_profiles(
+  model1_2,
+  rawdata = FALSE,  # Hide individual participants' observations.
+  add_line = TRUE, # Connect each profile's indicator means.
+  sd = FALSE       # Hide standard-deviation bars.
+) +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 35, vjust = 1, hjust = 1)
+  )
+
+
+tidyLPA::plot_profiles(
+  model1_3,
+  rawdata = FALSE,  # Hide individual participants' observations.
+  add_line = TRUE, # Connect each profile's indicator means.
+  sd = FALSE       # Hide standard-deviation bars.
+) +
+  ggplot2::theme(
+    # Rotate and align indicator labels to improve readability.
+    axis.text.x = ggplot2::element_text(angle = 35, vjust = 1, hjust = 1)
+  )
+
+
+tidyLPA::plot_profiles(
+  model1_6,
+  rawdata = FALSE,  # Hide individual participants' observations.
+  add_line = TRUE, # Connect each profile's indicator means.
+  sd = FALSE       # Hide standard-deviation bars.
+) +
+  ggplot2::theme(
+    # Rotate and align indicator labels to improve readability.
+    axis.text.x = ggplot2::element_text(angle = 35, vjust = 1, hjust = 1)
+  )
+
+
+```
+
+#### Comparing classes in Model 2
+
+```{r}
+#Model 2 -- 2,3
+#############################################################
+#Analysing if different classes (solutions) have significant differences
+##############################################################
+
+m2c2 <- model2_all$model_2_class_2$model  # Solution with 2 classes; model 2
+m2c3 <- model2_all$model_2_class_3$model  # Solution with 3 classes; model 2
+
+
+compare_lmr <- function(smaller, larger) {
+  tidyLPA::calc_lrt(
+    n = smaller$n,
+    null_ll = smaller$loglik,
+    null_param = smaller$df,
+    null_classes = smaller$G,
+    alt_ll = larger$loglik,
+    alt_param = larger$df,
+    
+    alt_classes = larger$G
+  )
+}
+
+
+compare_lmr(m2c2, m2c3)
+
+data$class2 <- as.factor( model2_all$model_2_class_2$model$classification)
+
+data$class3 <- as.factor( model2_all$model_2_class_3$model$classification)
+
+
+# Count participants assigned to each class in each solution.
+table(data$class2)
+table(data$class3)
+
+
+```
+
+#### Comparing Variables Across the Groups
+
+```{r}
+
+################################################################
+#Do the following analysis on the class
+################################################################
+
+data$latent_groups <- as.factor(
+  model2_3$model_2_class_3$model$classification)
+
+table(data$latent_groups)
+
+
+#########################################################
+# comparing the variables in the final LPA across the groups
+#########################################################
+
+data %>%
+  dplyr::select(
+    Security, Acceptance, Initiative, Competence, Meaning,      
+    latent_groups) %>%                       
+  gtsummary::tbl_summary(
+    
+    by = latent_groups,                      
+    
+    type = list(  
+      c(Security, Acceptance, Initiative, Competence, Meaning) ~ "continuous"), 
+
+    statistic = gtsummary::all_continuous() ~ "{mean} ({sd})",
+    
+    digits = gtsummary::all_continuous() ~ 2,  
+    
+    missing = "no"
+  ) %>% gtsummary::modify_header(label = "**Comparison Across Three Classes**")
+
+```
+
+#### Prediction
+
+```{r}
+
+
+lm1 <- lm(AR_2 ~ latent_groups, data = data)
+
+anova(lm1)
+
+
+emmeans::emmeans(lm1, pairwise ~ latent_groups,
+  adjust = "tukey")  
+
+
+emmeans::eff_size(emmeans::emmeans(lm1, ~ latent_groups),
+  edf = df.residual(lm1), sigma = sigma(lm1)
+
+)
+
+
+
+lm2 <- lm(AR_3 ~ latent_groups, data = data)
+
+anova(lm2)
+
+
+emmeans::emmeans(lm2, pairwise ~ latent_groups,
+                 adjust = "tukey")  
+
+
+emmeans::eff_size(
+  emmeans::emmeans(lm2, ~ latent_groups),
+  edf = df.residual(lm2),
+  sigma = sigma(lm2)
+)
+
+
+```
